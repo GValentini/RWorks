@@ -1,0 +1,159 @@
+---
+title: "SIR Epidemic Model"
+author: "Giovanni Valentini"
+date: "Saturday, April 11, 2020"
+output: html_document
+---
+
+### Intro   
+The **SIR Model** has been developed to simulate an epidemic over time. The model consists of a system of 3 differential equations that express the rates of change of 3 variables over time. The 3 variables are:   
+1. **S** the susceptibles of getting the infection   
+2. **I** the infected   
+3. **R** the recovered from the infection.   
+
+### The Equations of the Model
+We define **N** as the total population and this means $N = S + I + R$ for each time period. Let's explore the equations that govern the dynamics of the epidemic.   
+   
+#### 1 - Dynamics of the Susceptibles   
+Let's define `c` as the average number of contacts during a time interval `dt` (e.g. one day) and `p` as the probability of getting infected from an infected individual. As a consequence, the **probability** of getting infected during the time interval `dt` is:   
+$$ p \times c \times \frac{I}{N} \times dt $$
+
+The change in the number of susceptibles `dS` is given by the product of the probability above and the number of suscepibles `S` (we need a minus sign because the number of susceptibles decreases):
+$$ dS = -p \cdot c \cdot \frac{I}{N} \cdot dt \cdot S $$
+
+#### 2 - Dynamics of the Infected   
+We define $\tau$ as the average period required for an infected individual in order to get recovered. Then the probability of recovering during the time interval `dt` is:
+$$ \frac{dt}{\tau} $$
+
+The change in the number of infected `dI` has 2 components. A positive one, given by `-dS`, and a negative one, given by the probability of recovering defined above times the number of infected individuals `I`:
+\[ dI = p \cdot c \cdot \frac{I}{N} \cdot dt \cdot S - \frac{dt}{\tau} \cdot I \]   
+
+#### 3 - Dynamics of the Recovered   
+The change in the number of recovered `dR` is given by the infected individuals that get recovered:
+\[ dR = \frac{dt}{\tau} \cdot I \]
+
+### The Model
+In the 3 equations that we have defined above, we divide both the left and right side by `dt` in order to express the rate of change for each of the variables `S`, `I` and `R`. Thus we obtain a system of 3 **differential equations**:   
+\[ \tag{eq 1} \frac{dS}{dt} = -p \cdot c \cdot \frac{I}{N} \cdot S \]
+\[ \tag{eq 2} \frac{dI}{dt} = p \cdot c \cdot \frac{I}{N} \cdot S - \frac{1}{\tau} \cdot I \]
+\[ \tag{eq 3} \frac{dR}{dt} = \frac{1}{\tau} \cdot I \]
+
+We put $\beta = p \cdot c \cdot \frac{1}{N}$ and $\gamma = \frac{1}{\tau}$ and we display the final formulation of the **SIR Model**:
+\[ \tag{eq 4} \frac{dS}{dt} = -\beta \cdot S \cdot I \]
+\[ \tag{eq 5} \frac{dI}{dt} = \beta \cdot S \cdot I - \gamma \cdot I \]
+\[ \tag{eq 6} \frac{dR}{dt} = \gamma \cdot I \]
+   
+An epidemic increases over time when $\frac{dI}{dt} > 0$ that is when the rate of change for the number of infected **I** has a positive value. This means:
+\[ \beta \cdot S - \gamma > 0 \Rightarrow S \cdot \frac{\beta}{\gamma} > 1 \]
+
+At the beginning of the outbreak (time 0) there are very few infected ($I_{0} \approx 0$), and the number of susceptibles is almost equal to the total population ($S_{0} \approx N$). We define **R0** as the parameter that allows the epidemic to increase:
+\[ R_{0} = N \cdot \frac{\beta}{\gamma} = p \cdot c \cdot \tau > 1 \]
+
+### SIR Model simulation in R   
+The following is an attempt to develop a simulation of the model in R.   
+   
+```{r}
+# Define the function that calculate the values of the model
+sir_model <- function(beta,gamma,delta,N,I0,Tau,dt) {
+    # if delta <- 0 we have a SIR model (particular case)
+    S <- rep(0,Tau/dt)
+    S[1] <- N
+    I <- rep(0,Tau/dt)
+    I[1] <- I0
+    R <- rep(0,Tau/dt)
+    for (tt in 1:((Tau/dt)-1)) {
+        # Equations of the model
+        dS <- (-beta*I[tt]*S[tt] + delta*R[tt]) * dt
+        dI <- (beta*I[tt]*S[tt] - gamma*I[tt]) * dt
+        dR <- (gamma*I[tt] - delta*R[tt]) * dt
+        S[tt+1] <- S[tt] + dS
+        I[tt+1] <- I[tt] + dI
+        R[tt+1] <- R[tt] + dR
+    }
+return(list(S,I,R))
+}
+
+```
+
+We assign the values for the parameters:
+   
+```{r}
+# Model parameters
+beta <- 5*10^-9 # rate of infection
+gamma <- 0.12 # rate of recovery (try also 0.07)
+delta <- 0.0 # rate of immunity loss
+N <- 6*10^7 # Total population (N = S + I + R)
+I0 <- 10 # initial number of infected
+Tau <- 150 # period of 150 days
+dt <- 1/4 # time interval of 6 hours (1/4 of a day)
+print('The value of parameter R0 is:')
+
+```
+   
+```{r, echo=FALSE}
+format(x = N*beta/gamma, digits = 5)
+
+```
+
+We display the values over time:
+```{r}
+# Calculate the model
+sir <- sir_model(beta,gamma,delta,N,I0,Tau,dt)
+S = sir[[1]]; I = sir[[2]]; R = sir[[3]];
+# Plots that display the epidemic
+tt <- seq(0,(Tau-dt),dt)
+sirDf <- data.frame(tt,S,I,R)
+
+# Curve
+plot(S ~ tt, data = sirDf, type = "b", col = "blue", xlab = "days", ylab = "Susceptibles")
+grid()
+plot(I ~ tt, data = sirDf, type = "b", col = "red", xlab = "days", ylab = "Infected")
+grid()
+
+# Map
+plot(I[1:((Tau/dt)-1)],I[2:(Tau/dt)], col = "red", xlab = "Infected at time t", ylab = "Infected at time t+1")
+abline(a = 0, b = 1)
+grid()
+
+```
+
+### Display model evolution by making use of package ggplot2
+
+```{r message=FALSE, warning=FALSE, fig.width=9}
+library(ggplot2)
+library(tidyr)
+# Organize the dataframe
+sir2Df <- gather(data = sirDf, key = group, value = val, -tt)
+
+# Plot the data
+gg <- ggplot(data = sir2Df, aes(x = tt, y = val, group = group))
+gg <- gg + geom_line(aes(colour = group), size = 2)
+gg + xlab("number of days") + ylab("number of individuals") + theme_bw()
+
+```
+
+### What if we consider immunity loss?   
+In a more general model, recovered individuals could lose their immunity after some time. This **immunity loss** is expressed by the parameter `delta`. The larger the duration of immunity, the smaller the value of `delta`.   
+Let's assume that immunity is lost, on average, after 60 days from recovery ($\delta = 1/60$), and display the new simulation.   
+
+```{r warning=FALSE, fig.width=9}
+# Set the value of parameter delta (rate of immunity loss)
+delta <- 1/60
+# Expand the period of analysis to 300 days
+Tau <- 300
+# Calculate the model
+sir <- sir_model(beta,gamma,delta,N,I0,Tau,dt)
+S = sir[[1]]; I = sir[[2]]; R = sir[[3]];
+
+# Organize the dataframe
+tt <- seq(0,(Tau-dt),dt)
+sirDf <- data.frame(tt,S,I,R)
+sir2Df <- gather(data = sirDf, key = group, value = val, -tt)
+
+# Plot the data
+gg <- ggplot(data = sir2Df, aes(x = tt, y = val, group = group))
+gg <- gg + geom_line(aes(colour = group), size = 2)
+gg + xlab("number of days") + ylab("number of individuals") + theme_bw()
+
+```
+
